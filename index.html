@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Крестики-Нолики 5x5: Арена Перков</title>
+<style>
+  :root {
+    --bg: #0f1226;
+    --panel: #1a1f3d;
+    --panel2: #232a52;
+    --x: #00e5ff;
+    --o: #ff4d8d;
+    --energy: #ffd166;
+    --text: #eef1ff;
+    --muted: #8b93b8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: radial-gradient(1000px 600px at 20% 0%, #232a52 0%, var(--bg) 55%),
+                radial-gradient(800px 500px at 90% 100%, #3a1c5c 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, Arial, sans-serif;
+    display: flex; justify-content: center; padding: 16px;
+  }
+  .app { width: 100%; max-width: 1080px; }
+  header { text-align: center; margin-bottom: 12px; }
+  header h1 { margin: 6px 0; font-size: clamp(22px, 4vw, 36px); letter-spacing: 1px; }
+  header h1 span { color: var(--x); text-shadow: 0 0 18px rgba(0,229,255,.7); }
+  header h1 b { color: var(--o); text-shadow: 0 0 18px rgba(255,77,141,.7); }
+  .sub { color: var(--muted); font-size: 14px; }
+  .layout { display: grid; grid-template-columns: 1fr 340px; gap: 16px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .board-wrap {
+    background: linear-gradient(180deg, var(--panel), #141839);
+    border: 1px solid #323b73; border-radius: 18px; padding: 16px;
+    box-shadow: 0 10px 40px rgba(0,0,0,.4);
+  }
+  .topbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .mode-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  button { cursor: pointer; border: none; border-radius: 12px; font-weight: 700; color: #0b0e22; }
+  .btn {
+    background: #eef1ff; padding: 9px 14px; font-size: 14px;
+    border: 1px solid transparent;
+  }
+  .btn.active { background: var(--x); box-shadow: 0 0 16px rgba(0,229,255,.5); }
+  .btn.secondary { background: var(--panel2); color: var(--text); border-color: #3a447e; }
+  .btn.secondary:hover { border-color: var(--x); }
+  .status {
+    background: #10143a; border: 1px solid #323b73; border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap;
+  }
+  .turn-x { color: var(--x); } .turn-o { color: var(--o); }
+  .board {
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px;
+    aspect-ratio: 1; max-width: 560px; margin: 0 auto;
+  }
+  .cell {
+    background: #10143a; border: 2px solid #2e3770; border-radius: 14px;
+    font-size: clamp(28px, 6vw, 48px); font-weight: 900;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; position: relative; min-height: 0;
+    transition: transform .08s, border-color .15s, box-shadow .15s;
+    user-select: none;
+  }
+  .cell:hover:empty { border-color: var(--x); box-shadow: 0 0 14px rgba(0,229,255,.3); }
+  .cell.targeting { border-color: var(--energy); box-shadow: 0 0 0 3px rgba(255,209,102,.45); animation: pulse 1s infinite; }
+  .cell.X { color: var(--x); text-shadow: 0 0 16px rgba(0,229,255,.8); border-color: rgba(0,229,255,.5); }
+  .cell.O { color: var(--o); text-shadow: 0 0 16px rgba(255,77,141,.8); border-color: rgba(255,77,141,.5); }
+  .cell.win { background: #1eff9a22; border-color: #1eff9a; box-shadow: 0 0 20px rgba(30,255,154,.6); }
+  .cell .shield {
+    position: absolute; top: 4px; right: 6px; font-size: 18px;
+    filter: drop-shadow(0 0 6px #7cffcb);
+  }
+  @keyframes pulse { 50% { transform: scale(1.03); } }
+  @keyframes boom { 0% { transform: scale(1); } 40% { transform: scale(1.2) rotate(4deg); } 100% { transform: scale(1); } }
+  .cell.boom { animation: boom .4s; }
+  .side { display: flex; flex-direction: column; gap: 12px; }
+  .card {
+    background: linear-gradient(180deg, var(--panel), #141839);
+    border: 1px solid #323b73; border-radius: 18px; padding: 14px;
+  }
+  .card h3 { margin: 0 0 8px 0; font-size: 16px; }
+  .players { display: grid; gap: 8px; }
+  .player {
+    background: #10143a; border: 1px solid #323b73; border-radius: 12px; padding: 10px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .player.active { border-color: var(--energy); box-shadow: 0 0 14px rgba(255,209,102,.25); }
+  .energy { color: var(--energy); font-weight: 800; }
+  .energybar { height: 8px; background: #0a0d26; border-radius: 99px; overflow: hidden; margin-top: 6px; }
+  .energybar i { display: block; height: 100%; background: linear-gradient(90deg, #ff9f1c, var(--energy)); width: 30%; transition: width .3s; }
+  .perks { display: grid; gap: 8px; }
+  .perk {
+    display: flex; gap: 10px; align-items: center; text-align: left;
+    background: #10143a; color: var(--text); border: 1px solid #323b73;
+    padding: 10px; border-radius: 12px; width: 100%;
+  }
+  .perk:hover:not(:disabled) { border-color: var(--energy); }
+  .perk.selected { border-color: var(--energy); box-shadow: 0 0 14px rgba(255,209,102,.4); background: #1c2148; }
+  .perk:disabled { opacity: .45; cursor: not-allowed; }
+  .perk .ico { font-size: 24px; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: var(--panel2); border-radius: 10px; }
+  .perk .meta { font-size: 12px; color: var(--muted); }
+  .perk .cost { margin-left: auto; background: #0a0d26; border: 1px solid #4a548e; padding: 4px 8px; border-radius: 99px; color: var(--energy); font-size: 13px; white-space: nowrap; }
+  .log { height: 160px; overflow-y: auto; background: #0a0d26; border-radius: 12px; padding: 10px; font-size: 13px; border: 1px solid #2e3770; }
+  .log div { padding: 3px 0; border-bottom: 1px dashed #222a5c; }
+  .rules { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .rules b { color: var(--text); }
+  .score { display: flex; gap: 8px; }
+  .score div { flex: 1; text-align: center; background: #0a0d26; border-radius: 10px; padding: 8px; border: 1px solid #2e3770; }
+  .hint { min-height: 22px; color: var(--energy); font-size: 14px; font-weight: 700; text-align: center; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1><span>X</span> vs <b>O</b> — Арена Перков 5x5</h1>
+    <div class="sub">Победа — 4 в ряд. Перки тратят энергию и занимают ход. Старт: 3⚡, +1⚡ за ход, макс 10⚡</div>
+  </header>
+
+  <div class="layout">
+    <div class="board-wrap">
+      <div class="topbar">
+        <div class="mode-btns">
+          <button id="modePvp" class="btn active">👥 2 игрока</button>
+          <button id="modeBot" class="btn secondary">🤖 Против бота</button>
+          <button id="newGame" class="btn secondary">↻ Новая игра</button>
+        </div>
+        <div class="score">
+          <div>❌ X: <b id="scoreX">0</b></div>
+          <div>⭕ O: <b id="scoreO">0</b></div>
+          <div>🤝: <b id="scoreD">0</b></div>
+        </div>
+      </div>
+      <div class="status">
+        <div id="turnLabel">Ходит: <b class="turn-x">X</b></div>
+        <div id="roundLabel">Раунд 1</div>
+      </div>
+      <div id="hint" class="hint"></div>
+      <div id="board" class="board"></div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h3>⚡ Энергия и очерёдность</h3>
+        <div class="players">
+          <div id="pX" class="player">
+            <div style="flex:1"><b class="turn-x">Игрок X</b><span id="botTagX"></span><div class="energybar"><i id="barX"></i></div></div>
+            <div class="energy" id="enX">3⚡</div>
+          </div>
+          <div id="pO" class="player">
+            <div style="flex:1"><b class="turn-o">Игрок O</b><span id="botTagO"></span><div class="energybar"><i id="barO"></i></div></div>
+            <div class="energy" id="enO">3⚡</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>🎒 Перки <span style="color:var(--muted);font-weight:400">— выбери, потом кликни клетку</span></h3>
+        <div id="perks" class="perks"></div>
+        <button id="cancelPerk" class="btn secondary" style="width:100%;margin-top:8px;display:none">Отменить выбор перка</button>
+      </div>
+
+      <div class="card">
+        <h3>📜 Лог</h3>
+        <div id="log" class="log"></div>
+      </div>
+
+      <div class="card rules">
+        <b>Перки:</b><br>
+        💣 <b>Бомба (3⚡, кд 2)</b> — снести чужой знак. Не бьёт щиты.<br>
+        🔄 <b>Переворот (4⚡, кд 3)</b> — чужой знак становится твоим.<br>
+        🛡 <b>Щит (2⚡, кд 2)</b> — защита своей клетки на 2 хода соперника.<br>
+        ✌ <b>Двойной ход (5⚡, кд 4)</b> — ходишь ещё раз сразу.<br>
+        ❄ <b>Заморозка (4⚡, кд 3)</b> — соперник пропускает ход.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const N = 5, WIN = 4, MAX_EN = 10;
+const PERKS = [
+  { id: 'bomb',   ico: '💣', name: 'Бомба',        cost: 3, cd: 2, target: 'enemy', desc: 'Удалить чужой знак' },
+  { id: 'flip',   ico: '🔄', name: 'Переворот',    cost: 4, cd: 3, target: 'enemy', desc: 'Чужой знак → твой' },
+  { id: 'shield', ico: '🛡', name: 'Щит',          cost: 2, cd: 2, target: 'own',   desc: 'Защита на 2 хода' },
+  { id: 'double', ico: '✌', name: 'Двойной ход',   cost: 5, cd: 4, target: 'none',  desc: 'Ходишь ещё раз' },
+  { id: 'freeze', ico: '❄', name: 'Заморозка',     cost: 4, cd: 3, target: 'none',  desc: 'Соперник пропускает ход' },
+];
+
+let board, turn, energy, cooldowns, shields, skipNext, gameOver, mode, round, selectedPerk, scores, extraMove;
+
+function initState() {
+  board = Array(N * N).fill('');
+  turn = 'X';
+  energy = { X: 3, O: 3 };
+  cooldowns = { X: {}, O: {} };
+  PERKS.forEach(p => { cooldowns.X[p.id] = 0; cooldowns.O[p.id] = 0; });
+  shields = {}; // idx -> {player, left}
+  skipNext = { X: false, O: false };
+  gameOver = false;
+  round = 1;
+  selectedPerk = null;
+  extraMove = false;
+}
+
+scores = { X: 0, O: 0, D: 0 };
+mode = 'pvp';
+
+const boardEl = document.getElementById('board');
+const logEl = document.getElementById('log');
+const hintEl = document.getElementById('hint');
+
+function log(msg) {
+  const d = document.createElement('div');
+  d.textContent = msg;
+  logEl.prepend(d);
+}
+
+function idx(r, c) { return r * N + c; }
+
+function buildBoard() {
+  boardEl.innerHTML = '';
+  for (let i = 0; i < N * N; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cell';
+    cell.dataset.i = i;
+    cell.addEventListener('click', () => onCellClick(i, cell));
+    boardEl.appendChild(cell);
+  }
+}
+
+function render() {
+  const cells = boardEl.children;
+  for (let i = 0; i < N * N; i++) {
+    const c = cells[i];
+    c.textContent = board[i] || '';
+    c.classList.toggle('X', board[i] === 'X');
+    c.classList.toggle('O', board[i] === 'O');
+    // щит
+    const old = c.querySelector('.shield');
+    if (old) old.remove();
+    if (shields[i]) {
+      const s = document.createElement('span');
+      s.className = 'shield';
+      s.textContent = '🛡';
+      s.title = `Щит ${shields[i].player}, осталось: ${shields[i].left}`;
+      c.appendChild(s);
+    }
+    c.classList.toggle('targeting', !!selectedPerk && isValidTarget(i, selectedPerk, turn));
+  }
+  document.getElementById('turnLabel').innerHTML = gameOver ? 'Игра окончена' : `Ходит: <b class="${turn === 'X' ? 'turn-x' : 'turn-o'}">${turn}</b>${mode === 'bot' && turn === 'O' ? ' (бот)' : ''}`;
+  document.getElementById('roundLabel').textContent = 'Раунд ' + round;
+  document.getElementById('enX').textContent = energy.X + '⚡';
+  document.getElementById('enO').textContent = energy.O + '⚡';
+  document.getElementById('barX').style.width = (energy.X / MAX_EN * 100) + '%';
+  document.getElementById('barO').style.width = (energy.O / MAX_EN * 100) + '%';
+  document.getElementById('pX').classList.toggle('active', turn === 'X' && !gameOver);
+  document.getElementById('pO').classList.toggle('active', turn === 'O' && !gameOver);
+  document.getElementById('scoreX').textContent = scores.X;
+  document.getElementById('scoreO').textContent = scores.O;
+  document.getElementById('scoreD').textContent = scores.D;
+  document.getElementById('botTagO').textContent = mode === 'bot' ? ' 🤖' : '';
+  document.getElementById('botTagX').textContent = '';
+  renderPerks();
+  document.getElementById('cancelPerk').style.display = selectedPerk ? 'block' : 'none';
+}
+
+function renderPerks() {
+  const wrap = document.getElementById('perks');
+  wrap.innerHTML = '';
+  PERKS.forEach(p => {
+    const cd = cooldowns[turn][p.id];
+    const en = energy[turn];
+    const can = !gameOver && cd <= 0 && en >= p.cost && !(mode === 'bot' && turn === 'O' && false);
+    const b = document.createElement('button');
+    b.className = 'perk' + (selectedPerk === p.id ? ' selected' : '');
+    b.disabled = !can;
+    let cdTxt = cd > 0 ? ` • кд ${cd}` : '';
+    b.innerHTML = `<div class="ico">${p.ico}</div><div><div><b>${p.name}</b></div><div class="meta">${p.desc}${cdTxt}</div></div><div class="cost">${p.cost}⚡</div>`;
+    b.addEventListener('click', () => onPerkClick(p.id));
+    wrap.appendChild(b);
+  });
+}
+
+function onPerkClick(id) {
+  if (gameOver) return;
+  if (mode === 'bot' && turn === 'O') return;
+  const p = PERKS.find(x => x.id === id);
+  if (cooldowns[turn][id] > 0 || energy[turn] < p.cost) return;
+  if (p.target === 'none') {
+    useInstantPerk(id);
+    return;
+  }
+  selectedPerk = (selectedPerk === id) ? null : id;
+  hintEl.textContent = selectedPerk ? `${p.ico} ${p.name}: кликни по подсвеченной клетке` : '';
+  render();
+}
+
+function isValidTarget(i, perkId, player) {
+  const opp = player === 'X' ? 'O' : 'X';
+  const v = board[i];
+  const shielded = shields[i];
+  if (perkId === 'bomb' || perkId === 'flip') {
+    if (v !== opp) return false;
+    if (shielded && shielded.player === opp) return false;
+    return true;
+  }
+  if (perkId === 'shield') {
+    if (v !== player) return false;
+    if (shielded) return false;
+    return true;
+  }
+  return false;
+}
+
+function onCellClick(i) {
+  if (gameOver) return;
+  if (mode === 'bot' && turn === 'O') return;
+
+  if (selectedPerk) {
+    if (!isValidTarget(i, selectedPerk, turn)) {
+      hintEl.textContent = 'Сюда нельзя применить перк';
+      return;
+    }
+    useTargetPerk(selectedPerk, i);
+    return;
+  }
+  // обычный ход
+  if (board[i] !== '') return;
+  placeMark(i, turn);
+  afterAction(false);
+}
+
+function placeMark(i, player) {
+  board[i] = player;
+  const cells = boardEl.children;
+  cells[i].classList.remove('boom');
+  void cells[i].offsetWidth;
+}
+
+function useTargetPerk(perkId, i) {
+  const p = PERKS.find(x => x.id === perkId);
+  energy[turn] -= p.cost;
+  cooldowns[turn][perkId] = p.cd;
+  const opp = turn === 'X' ? 'O' : 'X';
+  const cellEl = boardEl.children[i];
+
+  if (perkId === 'bomb') {
+    board[i] = '';
+    delete shields[i];
+    cellEl.classList.add('boom');
+    log(`💣 ${turn} взорвал клетку ${cellName(i)}`);
+  } else if (perkId === 'flip') {
+    board[i] = turn;
+    delete shields[i];
+    cellEl.classList.add('boom');
+    log(`🔄 ${turn} перевербовал клетку ${cellName(i)}`);
+  } else if (perkId === 'shield') {
+    shields[i] = { player: turn, left: 2 };
+    log(`🛡 ${turn} поставил щит на ${cellName(i)}`);
+  }
+  selectedPerk = null;
+  hintEl.textContent = '';
+  afterAction(true);
+}
+
+function useInstantPerk(perkId) {
+  const p = PERKS.find(x => x.id === perkId);
+  energy[turn] -= p.cost;
+  cooldowns[turn][perkId] = p.cd;
+  const opp = turn === 'X' ? 'O' : 'X';
+  if (perkId === 'double') {
+    extraMove = true;
+    log(`✌ ${turn} активировал двойной ход!`);
+    render();
+    hintEl.textContent = 'Двойной ход: походи ещё раз (клетка или перк)';
+    if (mode === 'bot' && turn === 'O') { setTimeout(botMove, 500); }
+    return;
+  }
+  if (perkId === 'freeze') {
+    skipNext[opp] = true;
+    log(`❄ ${turn} заморозил ${opp} — тот пропустит ход`);
+    afterAction(true);
+  }
+}
+
+function cellName(i) {
+  return `(${Math.floor(i / N) + 1},${(i % N) + 1})`;
+}
+
+function checkWin(b, player) {
+  const wins = [];
+  const dirs = [[0,1],[1,0],[1,1],[1,-1]];
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      for (const [dr, dc] of dirs) {
+        const line = [];
+        for (let k = 0; k < WIN; k++) {
+          const nr = r + dr * k, nc = c + dc * k;
+          if (nr < 0 || nr >= N || nc < 0 || nc >= N) break;
+          if (b[nr * N + nc] !== player) break;
+          line.push(nr * N + nc);
+        }
+        if (line.length === WIN) wins.push(line);
+      }
+    }
+  }
+  return wins;
+}
+
+function afterAction(wasPerk) {
+  render();
+  // победа после перка/хода
+  for (const pl of ['X', 'O']) {
+    const w = checkWin(board, pl);
+    if (w.length) {
+      gameOver = true;
+      w[0].forEach(i => boardEl.children[i].classList.add('win'));
+      scores[pl]++;
+      log(`🏆 Победа ${pl}! Линия: ${w[0].map(cellName).join(' ')}`);
+      hintEl.textContent = `Победил ${pl}! Нажми «Новая игра»`;
+      render();
+      return;
+    }
+  }
+  if (board.every(v => v !== '')) {
+    gameOver = true;
+    scores.D++;
+    log('🤝 Ничья — поле заполнено');
+    hintEl.textContent = 'Ничья! Нажми «Новая игра»';
+    render();
+    return;
+  }
+
+  if (extraMove && wasPerk === false) {
+    // обычный ход после double уже был? логика ниже: extraMove обрабатывается при смене хода
+  }
+
+  // смена хода
+  if (extraMove && !wasPerk) {
+    // только что был обычный ход за double — даём ещё один ход тому же игроку
+    extraMove = false;
+    tickCooldownsPassive();
+    log(`${turn} ходит ещё раз (двойной ход)`);
+    // энергия +1 за доп. ход не даём повторно? даём, но в пределах макс
+    energy[turn] = Math.min(MAX_EN, energy[turn] + 1);
+    render();
+  } else if (extraMove && wasPerk) {
+    // double был только что активирован как перк — ход остаётся у игрока
+    render();
+    if (mode === 'bot' && turn === 'O') { setTimeout(botMove, 500); }
+    return;
+  } else {
+    endTurn();
+  }
+
+  // пропуск замороженного
+  if (!gameOver && skipNext[turn]) {
+    skipNext[turn] = false;
+    log(`❄ ${turn} заморожен — пропуск хода`);
+    hintEl.textContent = `${turn} пропускает ход (заморозка)!`;
+    endTurn();
+  }
+
+  render();
+  if (mode === 'bot' && turn === 'O' && !gameOver) {
+    setTimeout(botMove, 450);
+  }
+}
+
+function endTurn() {
+  // щиты тикают на ходах соперника владельца
+  for (const k of Object.keys(shields)) {
+    const s = shields[k];
+    if (s.player !== turn) { // текущий ходящий — соперник владельца щита
+      s.left--;
+      if (s.left <= 0) delete shields[k];
+    }
+  }
+  // кд тикают у обоих? тикаем у того кто ходил
+  for (const id of Object.keys(cooldowns[turn])) {
+    if (cooldowns[turn][id] > 0) cooldowns[turn][id]--;
+  }
+  turn = turn === 'X' ? 'O' : 'X';
+  if (turn === 'X') round++;
+  energy[turn] = Math.min(MAX_EN, energy[turn] + 1);
+  selectedPerk = null;
+  hintEl.textContent = '';
+}
+
+// чтобы кд не висели вечно при double — небольшой тик
+function tickCooldownsPassive() {
+  for (const id of Object.keys(cooldowns[turn])) {
+    if (cooldowns[turn][id] > 0) cooldowns[turn][id]--;
+  }
+}
+
+// ---------- БОТ ----------
+function emptyCells(b = board) {
+  const r = [];
+  b.forEach((v, i) => { if (v === '') r.push(i); });
+  return r;
+}
+
+function findWinningMove(b, player) {
+  for (const i of emptyCells(b)) {
+    b[i] = player;
+    const w = checkWin(b, player).length > 0;
+    b[i] = '';
+    if (w) return i;
+  }
+  return -1;
+}
+
+// найти линию где у соперника WIN-1 и есть пустая для победы — для бомбы/блока
+function findThreatCell(player) {
+  // ищем пустую клетку, закрывающую победу player
+  return findWinningMove(board, player);
+}
+
+function findBombTarget() {
+  // клетка соперника, входящая в самую длинную линию X
+  let best = -1, bestScore = 0;
+  board.forEach((v, i) => {
+    if (v !== 'X') return;
+    if (shields[i] && shields[i].player === 'X') return;
+    const s = lineScore(i, 'X');
+    if (s > bestScore) { bestScore = s; best = i; }
+  });
+  return bestScore >= 2 ? best : -1;
+}
+
+function lineScore(i, player) {
+  const r0 = Math.floor(i / N), c0 = i % N;
+  let max = 0;
+  for (const [dr, dc] of [[0,1],[1,0],[1,1],[1,-1]]) {
+    let cnt = 1;
+    for (const s of [1, -1]) {
+      let r = r0 + dr * s, c = c0 + dc * s;
+      while (r >= 0 && r < N && c >= 0 && c < N && board[r * N + c] === player) { cnt++; r += dr * s; c += dc * s; }
+    }
+    max = Math.max(max, cnt);
+  }
+  return max;
+}
+
+function botMove() {
+  if (gameOver || turn !== 'O') return;
+
+  // 1. Перки бота (шанс 35% если хватает энергии)
+  const opp = 'X';
+  // заморозка если у X почти победа и бот может
+  if (energy.O >= 4 && cooldowns.O.freeze <= 0 && findThreatCell('X') >= 0 && Math.random() < 0.4) {
+    log('🤖 Бот использует ❄ Заморозку');
+    useInstantPerk('freeze');
+    return;
+  }
+  // бомба по угрозе
+  const bt = findBombTarget();
+  if (bt >= 0 && energy.O >= 3 && cooldowns.O.bomb <= 0 && Math.random() < 0.55) {
+    energy.O -= 3; cooldowns.O.bomb = 2;
+    board[bt] = ''; delete shields[bt];
+    boardEl.children[bt].classList.add('boom');
+    log(`🤖 Бот 💣 взорвал ${cellName(bt)}`);
+    afterAction(true);
+    return;
+  }
+  // переворот если выгодно (рядом свои)
+  if (energy.O >= 4 && cooldowns.O.flip <= 0 && bt >= 0 && Math.random() < 0.3) {
+    energy.O -= 4; cooldowns.O.flip = 3;
+    board[bt] = 'O'; delete shields[bt];
+    log(`🤖 Бот 🔄 перевербовал ${cellName(bt)}`);
+    afterAction(true);
+    return;
+  }
+  // щит своей сильной клетки
+  if (energy.O >= 2 && cooldowns.O.shield <= 0 && Math.random() < 0.2) {
+    let best = -1, bs = 0;
+    board.forEach((v, i) => {
+      if (v !== 'O' || shields[i]) return;
+      const s = lineScore(i, 'O');
+      if (s > bs) { bs = s; best = i; }
+    });
+    if (best >= 0 && bs >= 2) {
+      energy.O -= 2; cooldowns.O.shield = 2;
+      shields[best] = { player: 'O', left: 2 };
+      log(`🤖 Бот 🛡 защитил ${cellName(best)}`);
+      afterAction(true);
+      return;
+    }
+  }
+
+  // 2. Обычный ход: победа > блок > центр > случайное рядом с движухой
+  let mv = findWinningMove(board, 'O');
+  if (mv < 0) mv = findWinningMove(board, 'X'); // блок
+  if (mv < 0) {
+    const empt = emptyCells();
+    // предпочтение центру и клеткам рядом с фигурами
+    const scored = empt.map(i => {
+      const r = Math.floor(i / N), c = i % N;
+      let s = Math.random() * 2;
+      s -= (Math.abs(r - 2) + Math.abs(c - 2)) * 0.6; // ближе к центру лучше
+      // бонус за соседство
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        const nr = r + dr, nc = c + dc;
+        if (nr >= 0 && nr < N && nc >= 0 && nc < N && board[nr * N + nc] !== '') s += 0.7;
+      }
+      return { i, s };
+    });
+    scored.sort((a, b) => b.s - a.s);
+    mv = scored[0].i;
+  }
+  placeMark(mv, 'O');
+  log(`🤖 Бот поставил O на ${cellName(mv)}`);
+  afterAction(false);
+}
+
+// ---------- UI wiring ----------
+document.getElementById('modePvp').addEventListener('click', e => {
+  mode = 'pvp';
+  document.getElementById('modePvp').classList.add('active');
+  document.getElementById('modePvp').classList.remove('secondary');
+  document.getElementById('modeBot').classList.remove('active');
+  document.getElementById('modeBot').classList.add('secondary');
+  newGame();
+});
+document.getElementById('modeBot').addEventListener('click', e => {
+  mode = 'bot';
+  document.getElementById('modeBot').classList.add('active');
+  document.getElementById('modeBot').classList.remove('secondary');
+  document.getElementById('modePvp').classList.remove('active');
+  document.getElementById('modePvp').classList.add('secondary');
+  newGame();
+});
+document.getElementById('newGame').addEventListener('click', newGame);
+document.getElementById('cancelPerk').addEventListener('click', () => { selectedPerk = null; hintEl.textContent = ''; render(); });
+
+function newGame() {
+  initState();
+  buildBoard();
+  hintEl.textContent = '';
+  log(`--- Новая игра (${mode === 'bot' ? 'против бота' : '2 игрока'}) ---`);
+  render();
+}
+
+initState();
+buildBoard();
+log('Добро пожаловать на Арену Перков! Победа — 4 в ряд.');
+render();
+</script>
+</body>
+</html>
